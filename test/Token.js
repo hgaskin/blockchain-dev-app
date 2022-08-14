@@ -6,7 +6,14 @@ const tokens = (n) => {
 };
 
 describe("Token Contract Test", () => {
-  let token, accounts, deployer, receiver, deployerAddress, receiverAddress;
+  let token,
+    accounts,
+    deployer,
+    receiver,
+    exchange,
+    deployerAddress,
+    receiverAddress,
+    exchangeAddress;
 
   beforeEach(async () => {
     const Token = await ethers.getContractFactory("Token");
@@ -15,8 +22,10 @@ describe("Token Contract Test", () => {
     accounts = await ethers.getSigners();
     deployer = accounts[0];
     receiver = accounts[1];
+    exchange = accounts[2];
     deployerAddress = deployer.address;
     receiverAddress = receiver.address;
+    exchangeAddress = exchange.address;
   });
 
   describe("Deployment", () => {
@@ -87,6 +96,43 @@ describe("Token Contract Test", () => {
         const recipient = "0x0000000000000000000000000000000000000000";
         const amount = tokens("100");
         await expect(token.connect(deployer).transfer(recipient, amount)).to.be
+          .reverted;
+      });
+    });
+  });
+
+  describe("Approving Tokens", () => {
+    let amount, transaction, result;
+
+    beforeEach(async () => {
+      amount = tokens("100");
+      transaction = await token
+        .connect(deployer)
+        .approve(exchangeAddress, amount);
+      result = await transaction.wait();
+    });
+
+    describe("Success", () => {
+      it("allows spender to withdraw tokens", async () => {
+        expect(
+          await token.allowance(deployerAddress, exchangeAddress)
+        ).to.equal(amount);
+      });
+
+      it("emits an Approval event", async () => {
+        const event = result.events[0];
+        expect(event.event).to.equal("Approval");
+
+        const args = event.args;
+        expect(args.owner).to.equal(deployerAddress);
+        expect(args.spender).to.equal(exchangeAddress);
+        expect(args.value).to.equal(amount);
+      });
+    });
+    describe("Failure", () => {
+      it("rejects invalid spenders", async () => {
+        const spender = "0x0000000000000000000000000000000000000000";
+        await expect(token.connect(deployer).approve(spender, amount)).to.be
           .reverted;
       });
     });
